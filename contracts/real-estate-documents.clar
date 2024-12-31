@@ -73,3 +73,89 @@
   )
 )
 
+;; Public Document Functions
+
+;; Upload a new document with metadata and tags
+(define-public (upload-document (title (string-ascii 64)) (size uint) (description (string-ascii 128)) (tags (list 10 (string-ascii 32))))
+  (let
+    (
+      (new-document-id (+ (var-get document-count) u1))
+    )
+    (asserts! (> (len title) u0) error-invalid-title)
+    (asserts! (< (len title) u65) error-invalid-title)
+    (asserts! (> size u0) error-invalid-size)
+    (asserts! (< size u1000000000) error-invalid-size)
+    (asserts! (> (len description) u0) error-invalid-title)
+    (asserts! (< (len description) u129) error-invalid-title)
+    (asserts! (validate-tags tags) error-invalid-title)
+
+    (map-insert real-estate-documents
+      { document-id: new-document-id }
+      {
+        document-title: title,
+        document-owner: tx-sender,
+        document-size: size,
+        upload-date: block-height,
+        document-description: description,
+        document-tags: tags
+      }
+    )
+
+    (map-insert document-permissions
+      { document-id: new-document-id, user: tx-sender }
+      { has-access: true }
+    )
+    (var-set document-count new-document-id)
+    (ok new-document-id)
+  )
+)
+
+;; Transfer ownership of a document to a new owner
+(define-public (transfer-document-ownership (document-id uint) (new-owner principal))
+  (let
+    (
+      (document-data (unwrap! (map-get? real-estate-documents { document-id: document-id }) error-document-not-found))
+    )
+    (asserts! (is-document-present document-id) error-document-not-found)
+    (asserts! (is-eq (get document-owner document-data) tx-sender) error-unauthorized-action)
+    (map-set real-estate-documents
+      { document-id: document-id }
+      (merge document-data { document-owner: new-owner })
+    )
+    (ok true)
+  )
+)
+
+;; Functionality: Check if a user has access to a document
+(define-public (check-access (document-id uint) (user principal))
+  (let
+    (
+      (permission (map-get? document-permissions { document-id: document-id, user: user }))
+    )
+    (if (is-some permission)
+      (ok (get has-access (unwrap-panic permission)))
+      error-access-denied
+    )
+  )
+)
+
+;; Add a new function to view the details of a document
+(define-public (view-document-details (document-id uint))
+  (let
+    (
+      (document-data (unwrap! (map-get? real-estate-documents { document-id: document-id }) error-document-not-found))
+    )
+    (ok document-data)
+  )
+)
+
+;; Optimize contract function by reducing redundant document existence checks
+(define-public (get-document-info (document-id uint))
+  (let
+    (
+      (document-data (unwrap! (map-get? real-estate-documents { document-id: document-id }) error-document-not-found))
+    )
+    (ok document-data)
+  )
+)
+
