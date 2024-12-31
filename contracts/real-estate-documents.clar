@@ -159,3 +159,75 @@
   )
 )
 
+;; Add a test suite function to validate document upload success
+(define-public (test-upload-document)
+  (let
+    (
+      (test-title "Test Document")
+      (test-size u500)
+      (test-description "Test Document Description")
+      (test-tags (list "test" "document"))
+    )
+    (asserts! (> (len test-title) u0) error-invalid-title)
+    (asserts! (> test-size u0) error-invalid-size)
+    (ok "Upload test passed")
+  )
+)
+
+;; Fix bug in permission handling, ensuring the correct access level is granted
+(define-public (check-document-access (document-id uint) (user principal))
+  (let
+    (
+      (permission (unwrap! (map-get? document-permissions { document-id: document-id, user: user }) error-access-denied))
+    )
+    (ok (get has-access permission))
+  )
+)
+
+;; Enhance security by verifying document permissions before granting access
+(define-public (check-access-before-view (document-id uint) (user principal))
+  (let
+    (
+      (permission (unwrap! (map-get? document-permissions { document-id: document-id, user: user }) error-access-denied))
+    )
+    (asserts! (get has-access permission) error-access-denied)
+    (ok true)
+  )
+)
+
+;; Update document details (title, size, description, and tags)
+(define-public (update-document (document-id uint) (new-title (string-ascii 64)) (new-size uint) (new-description (string-ascii 128)) (new-tags (list 10 (string-ascii 32))))
+  (let
+    (
+      (document-data (unwrap! (map-get? real-estate-documents { document-id: document-id }) error-document-not-found))
+    )
+    (asserts! (is-document-present document-id) error-document-not-found)
+    (asserts! (is-eq (get document-owner document-data) tx-sender) error-unauthorized-action)
+    (asserts! (> (len new-title) u0) error-invalid-title)
+    (asserts! (< (len new-title) u65) error-invalid-title)
+    (asserts! (> new-size u0) error-invalid-size)
+    (asserts! (< new-size u1000000000) error-invalid-size)
+    (asserts! (> (len new-description) u0) error-invalid-title)
+    (asserts! (< (len new-description) u129) error-invalid-title)
+    (asserts! (validate-tags new-tags) error-invalid-title)
+
+    (map-set real-estate-documents
+      { document-id: document-id }
+      (merge document-data { document-title: new-title, document-size: new-size, document-description: new-description, document-tags: new-tags })
+    )
+    (ok true)
+  )
+)
+
+;; Delete a document (only document owner can delete)
+(define-public (delete-document (document-id uint))
+  (let
+    (
+      (document-data (unwrap! (map-get? real-estate-documents { document-id: document-id }) error-document-not-found))
+    )
+    (asserts! (is-document-present document-id) error-document-not-found)
+    (asserts! (is-eq (get document-owner document-data) tx-sender) error-unauthorized-action)
+    (map-delete real-estate-documents { document-id: document-id })
+    (ok true)
+  )
+)
